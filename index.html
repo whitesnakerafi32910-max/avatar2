@@ -36,7 +36,6 @@
 <div id="status">ボタンを押して話しかけてね</div>
 <button id="talkBtn" onclick="startListening()">🎤 話す</button>
 <div id="log"></div>
-
 <script>
 const MODEL = "gemini-flash-latest";
 let apiKey = localStorage.getItem("geminiKey");
@@ -57,14 +56,12 @@ function addLog(text, cls) {
   log.appendChild(d); log.scrollTop = log.scrollHeight;
 }
 
-// まばたき
 setInterval(() => {
   ["eyeL","eyeR"].forEach(id => document.getElementById(id).setAttribute("ry", 1));
   setTimeout(() => ["eyeL","eyeR"].forEach(id =>
     document.getElementById(id).setAttribute("ry", 11)), 150);
 }, 3500);
 
-// 口パク
 let mouthTimer = null;
 function startMouth() {
   const m = document.getElementById("mouth");
@@ -75,8 +72,6 @@ function stopMouth() {
   document.getElementById("mouth").setAttribute("ry", 3);
 }
 
-
-// 音声認識
 function startListening() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
@@ -84,9 +79,10 @@ function startListening() {
   rec.lang = "ja-JP";
   document.getElementById("status").textContent = "聞いています…";
   rec.onresult = e => askGemini(e.results[0][0].transcript);
-  rec.onerror = () => document.getElementById("status").textContent = "聞き取れま
+  rec.onerror = () => document.getElementById("status").textContent = "聞き取れませんでした";
+  rec.start();
+}
 
-// Geminiに質問
 async function askGemini(text) {
   addLog(text, "me");
   document.getElementById("status").textContent = "考えています…";
@@ -110,7 +106,6 @@ async function askGemini(text) {
   }
 }
 
-// 読み上げ
 function speak(text) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "ja-JP";
@@ -119,5 +114,3 @@ function speak(text) {
   speechSynthesis.speak(u);
 }
 </script>
-</body>
-</html>
