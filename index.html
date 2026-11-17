@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIアバター</title>
+<style>
+  body { font-family: sans-serif; background:#eef3f8; margin:0; text-align:center; }
+  #face { width:220px; height:220px; margin:20px auto 10px; }
+  #log { height:30vh; overflow-y:auto; background:#fff; margin:10px; padding:10px;
+         border-radius:12px; text-align:left; font-size:15px; }
+  .me { color:#1565c0; margin:6px 0; } .ai { color:#333; margin:6px 0; }
+  button { font-size:20px; padding:14px 28px; border:none; border-radius:30px;
+           background:#ff7a59; color:#fff; margin:6px; }
+  #setup input { width:80%; font-size:16px; padding:8px; margin:6px; }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <p>Gemini APIキーを入力してください（最初の1回だけ）</p>
+  <input id="keyInput" type="password" placeholder="APIキー">
+  <br><button onclick="saveKey()">保存</button>
+</div>
+
+<svg id="face" viewBox="0 0 200 200">
+  <circle cx="100" cy="100" r="90" fill="#ffe0bd"/>
+  <path d="M15 85 Q100 -10 185 85 Q150 40 100 45 Q50 40 15 85" fill="#4a3426"/>
+  <ellipse id="eyeL" cx="70" cy="95" rx="9" ry="11" fill="#333"/>
+  <ellipse id="eyeR" cx="130" cy="95" rx="9" ry="11" fill="#333"/>
+  <circle cx="55" cy="125" r="10" fill="#ffb3a7" opacity="0.6"/>
+  <circle cx="145" cy="125" r="10" fill="#ffb3a7" opacity="0.6"/>
+  <ellipse id="mouth" cx="100" cy="145" rx="18" ry="3" fill="#c0392b"/>
+</svg>
+
+<div id="status">ボタンを押して話しかけてね</div>
+<button id="talkBtn" onclick="startListening()">🎤 話す</button>
+<div id="log"></div>
+
+<script>
+const MODEL = "gemini-flash-latest";
+let apiKey = localStorage.getItem("geminiKey");
+let history = [];
+if (apiKey) document.getElementById("setup").style.display = "none";
+
+function saveKey() {
+  apiKey = document.getElementById("keyInput").value.trim();
+  if (!apiKey) return;
+  localStorage.setItem("geminiKey", apiKey);
+  document.getElementById("setup").style.display = "none";
+}
+
+function addLog(text, cls) {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = (cls === "me" ? "あなた：" : "AI：") + text;
+  const log = document.getElementById("log");
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+}
+
+// まばたき
+setInterval(() => {
+  ["eyeL","eyeR"].forEach(id => document.getElementById(id).setAttribute("ry", 1));
+  setTimeout(() => ["eyeL","eyeR"].forEach(id =>
+    document.getElementById(id).setAttribute("ry", 11)), 150);
+}, 3500);
+
+// 口パク
+let mouthTimer = null;
+function startMouth() {
+  const m = document.getElementById("mouth");
+  mouthTimer = setInterval(() => m.setAttribute("ry", 3 + Math.random() * 12), 120);
+}
+function stopMouth() {
+  clearInterval(mouthTimer);
+  document.getElementById("mouth").setAttribute("ry", 3);
+}
+
+
+// 音声認識
+function startListening() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
+  const rec = new SR();
+  rec.lang = "ja-JP";
+  document.getElementById("status").textContent = "聞いています…";
+  rec.onresult = e => askGemini(e.results[0][0].transcript);
+  rec.onerror = () => document.getElementById("status").textContent = "聞き取れま
+
+// Geminiに質問
+async function askGemini(text) {
+  addLog(text, "me");
+  document.getElementById("status").textContent = "考えています…";
+  history.push({ role: "user", parts: [{ text }] });
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text:
+            "あなたは親しみやすい会話相手です。日本語で、2〜3文の短い話し言葉で返事してください。" }] },
+          contents: history }) });
+    const data = await res.json();
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text
+                  || "ごめんね、うまく返事できなかった。";
+    history.push({ role: "model", parts: [{ text: reply }] });
+    addLog(reply, "ai");
+    speak(reply);
+  } catch (e) {
+    document.getElementById("status").textContent = "通信エラーが起きました";
+  }
+}
+
+// 読み上げ
+function speak(text) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP";
+  u.onstart = () => { startMouth(); document.getElementById("status").textContent = "話しています…"; };
+  u.onend = () => { stopMouth(); document.getElementById("status").textContent = "ボタンを押して話しかけてね"; };
+  speechSynthesis.speak(u);
+}
+</script>
+</body>
+</html>
